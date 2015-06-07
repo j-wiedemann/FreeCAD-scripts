@@ -1,0 +1,105 @@
+# coding: utf8
+#***************************************************************************
+#*   (c) Jonathan Wiedemann (contact@freecad-france.com) 2015              *
+#*                                                                         *
+#*   This file is part of the FreeCAD CAx development system.              *
+#*                                                                         *
+#*   This program is free software; you can redistribute it and/or modify  *
+#*   it under the terms of the GNU Lesser General Public License (LGPL)    *
+#*   as published by the Free Software Foundation; either version 2 of     *
+#*   the License, or (at your option) any later version.                   *
+#*   for detail see the LICENCE text file.                                 *
+#*                                                                         *
+#*   FreeCAD is distributed in the hope that it will be useful,            *
+#*   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+#*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+#*   GNU Lesser General Public License for more details.                   *
+#*                                                                         *
+#*   You should have received a copy of the GNU Library General Public     *
+#*   License along with FreeCAD; if not, write to the Free Software        *
+#*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
+#*   USA                                                                   *
+#*                                                                         *
+#***************************************************************************/
+from PySide import QtCore, QtGui
+import subprocess
+
+def openscam_project(machine, obj, path):
+	objshape = obj.Shape
+	objbbox = objshape.BoundBox
+
+	wp_min_X = objbbox.XMin
+	wp_min_Y = objbbox.YMin
+	wp_min_Z = objbbox.ZMin
+
+	wp_max_X = objbbox.XMax
+	wp_max_Y = objbbox.YMax
+	wp_max_Z = objbbox.ZMax
+
+	openscamcode = str("<openscam>")+'\n'
+	openscamcode += str("  <!-- Note, all values are in mm regardless of 'units' option. -->")+'\n'
+	openscamcode += str("  <!-- NC Files -->")+'\n'
+	openscamcode += str("  <nc-files>")+'\n'
+	ncfile = path[0].split("/")
+	ncfile = ncfile[-1]
+	openscamcode += str("    {0}").format(ncfile)
+	openscamcode += '\n'
+	openscamcode += str("  </nc-files>")+'\n'
+	openscamcode += str("  <!-- Renderer -->")+'\n'
+	openscamcode += str("  <resolution v='0,334966'/>")+'\n'
+	#Workpiece
+	openscamcode += '\n'
+	openscamcode += str("  <!-- Workpiece -->")+'\n'
+	openscamcode += str("  <automatic-workpiece v='false'/>")+'\n'
+	openscamcode += str("  <workpiece-max v='({0},{1},{2})'/>").format(wp_max_X,wp_max_Y,wp_max_Z)
+	openscamcode += '\n'
+	openscamcode += str("  <workpiece-min v='({0},{1},{2})'/>").format(wp_min_X,wp_min_Y,wp_min_Z)
+	openscamcode += '\n'
+	##Tooltable
+	openscamcode += '\n'
+	openscamcode += str("  <tool_table>")+'\n'
+	number = 0
+	for number in machine.Tooltable.Tools :
+		tool = machine.Tooltable.getTool(number)
+		length = tool.LengthOffset
+		#number += tool
+		radius = tool.Diameter/2
+		openscamcode += ("    <tool length='{0},' number='{1}' radius='{2},' shape='CYLINDRICAL' units='MM'/>").format(length, number, radius)
+		openscamcode += '\n'
+
+	openscamcode += str("  </tool_table>")+'\n'
+	openscamcode += str("</openscam>")
+
+	print openscamcode
+
+	filepathlist = path[0].split('/')
+	filepathlist.pop()
+	filepath = ''
+	for o in filepathlist:
+		filepath += str(o)+'/'
+	filename = ncfile.split(".")
+	filename = str(filename[0]) + str('.xml')
+	filename = str(filepath) + str(filename)
+
+	openscamfile = open(filename,"wb")
+	openscamfile.write(openscamcode)
+	openscamfile.close()
+
+	command = str('openscam ') + str(filename)
+	subprocess.Popen(['openscam', filename])
+
+try :
+	machine = FreeCADGui.Selection.getSelection()[0]
+	obj = FreeCADGui.Selection.getSelection()[1]
+except :
+	reply = QtGui.QMessageBox.information(None,"",u"Sélectionner une machine et la piece à usinée.")
+
+if hasattr(machine,"MachineName") and hasattr(obj,"Shape"):
+	print machine.MachineName
+	print obj.Name
+	#selectionner un projet path et un objet
+	path = QtGui.QFileDialog.getOpenFileName(None,u'Choisir un fichier GCODE')
+	if path[0] != '':
+		openscam_project(machine, obj, path)
+else :
+	reply = QtGui.QMessageBox.information(None,"",u"Sélectionner une machine et la piece à usinée.")
